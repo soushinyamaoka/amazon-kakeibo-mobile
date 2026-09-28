@@ -53,7 +53,7 @@ function findMatchingCombination(candidates, targetAmount) {
   return null;
 }
 
-function AmazonMatchModal({ visible, onClose, smbcItem, allItems }) {
+function AmazonMatchModal({ visible, onClose, smbcItem, allItems, onConfirmMatch, onCancelMatch }) {
   const [selectedDetail, setSelectedDetail] = useState(null);
 
   const candidates = useMemo(
@@ -64,6 +64,22 @@ function AmazonMatchModal({ visible, onClose, smbcItem, allItems }) {
     () => (smbcItem ? findMatchingCombination(candidates, smbcItem.price) : null),
     [candidates, smbcItem]
   );
+
+  const handleConfirm = () => {
+    if (matchingIds) {
+      onConfirmMatch(smbcItem);
+      onClose();
+      return;
+    }
+    Alert.alert(
+      '確認',
+      '金額が一致する組み合わせは見つかっていません。それでも集計から除外しますか？',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '除外する', style: 'destructive', onPress: () => { onConfirmMatch(smbcItem); onClose(); } },
+      ]
+    );
+  };
 
   if (!smbcItem) return null;
 
@@ -84,6 +100,15 @@ function AmazonMatchModal({ visible, onClose, smbcItem, allItems }) {
             <Text style={mStyles.smbcLabel}>🏦 SMBC引き落とし</Text>
             <Text style={mStyles.smbcDetail}>{smbcItem.date}　{formatYen(smbcItem.price)}</Text>
           </View>
+
+          <TouchableOpacity
+            style={mStyles.actionButton}
+            onPress={smbcItem.excluded === true ? () => { onCancelMatch(smbcItem); onClose(); } : handleConfirm}
+          >
+            <Text style={mStyles.actionButtonText}>
+              {smbcItem.excluded === true ? '紐づけを解除（集計に戻す）' : '✅ 紐づけ確定（集計から除外）'}
+            </Text>
+          </TouchableOpacity>
 
           {/* 金額一致通知 */}
           {matchingIds && (
@@ -189,6 +214,8 @@ const mStyles = StyleSheet.create({
   smbcInfo: { padding: 12, marginHorizontal: 16, marginTop: 12, backgroundColor: 'rgba(69,123,157,0.1)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(69,123,157,0.2)' },
   smbcLabel: { fontSize: 11, color: '#457B9D', marginBottom: 4 },
   smbcDetail: { fontSize: 14, fontWeight: '600', color: '#e0e0e0' },
+  actionButton: { marginHorizontal: 16, marginTop: 8, padding: 11, borderRadius: 8, backgroundColor: 'rgba(129,178,154,0.15)', borderWidth: 1, borderColor: 'rgba(129,178,154,0.3)' },
+  actionButtonText: { color: '#81B29A', fontSize: 13, textAlign: 'center', fontWeight: '600' },
   matchBanner: { marginHorizontal: 16, marginTop: 8, padding: 10, backgroundColor: 'rgba(129,178,154,0.15)', borderRadius: 8 },
   matchText: { fontSize: 12, color: '#81B29A', textAlign: 'center', fontWeight: '600' },
   list: { paddingHorizontal: 16, paddingBottom: 32 },
@@ -258,7 +285,7 @@ export default function HistoryScreen() {
     selectedMonth, setSelectedMonth, months,
     selectedPayment, setSelectedPayment, paymentMethods,
     selectedSource, setSelectedSource, availableSources,
-    updateItem, deleteItem, addItems,
+    updateItem, deleteItem, addItems, calculateItemsTotal,
     learnedCategories, learnCategory,
   } = useData();
 
@@ -271,7 +298,7 @@ export default function HistoryScreen() {
     date: new Date().toISOString().slice(0, 10),
   });
 
-  const searched = searchQuery
+  const searched = searchQuery.trim()
     ? filteredItems.filter((i) =>
         i.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         i.category.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -305,6 +332,16 @@ export default function HistoryScreen() {
     }
   }, []);
 
+  const handleConfirmMatch = useCallback((smbcItem) => {
+    updateItem(smbcItem.id, { excluded: true });
+  }, [updateItem]);
+  const handleCancelMatch = useCallback((smbcItem) => {
+    updateItem(smbcItem.id, { excluded: false });
+  }, [updateItem]);
+  const currentAmazonMatchItem = amazonMatchItem
+    ? items.find((item) => item.id === amazonMatchItem.id) || null
+    : null;
+
   const prevMonth = () => { const idx = months.indexOf(selectedMonth); if (idx < months.length - 1) setSelectedMonth(months[idx + 1]); };
   const nextMonth = () => { const idx = months.indexOf(selectedMonth); if (idx > 0) setSelectedMonth(months[idx - 1]); };
 
@@ -330,7 +367,7 @@ export default function HistoryScreen() {
         <TextInput placeholder="🔍 商品名・カテゴリで検索" placeholderTextColor="#8D99AE" value={searchQuery} onChangeText={setSearchQuery} style={styles.searchInput} />
       </View>
 
-      <Text style={styles.summary}>{searched.length}件 ・ 合計 {formatYen(monthlyTotal)}</Text>
+      <Text style={styles.summary}>{searched.length}件 ・ 合計 {formatYen(searchQuery.trim() ? calculateItemsTotal(searched) : monthlyTotal)}</Text>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 80 }}>
         {searched.map((item) => {
@@ -359,6 +396,11 @@ export default function HistoryScreen() {
                       {isAmazon && (
                         <View style={styles.amazonBadge}>
                           <Text style={styles.amazonBadgeText}>🔗 Amazon明細を表示</Text>
+                        </View>
+                      )}
+                      {item.excluded === true && (
+                        <View style={styles.excludedBadge}>
+                          <Text style={styles.excludedBadgeText}>集計対象外</Text>
                         </View>
                       )}
                     </View>
@@ -391,10 +433,12 @@ export default function HistoryScreen() {
 
       {/* Amazon紐づけモーダル */}
       <AmazonMatchModal
-        visible={!!amazonMatchItem}
+        visible={!!currentAmazonMatchItem}
         onClose={() => setAmazonMatchItem(null)}
-        smbcItem={amazonMatchItem}
+        smbcItem={currentAmazonMatchItem}
         allItems={items}
+        onConfirmMatch={handleConfirmMatch}
+        onCancelMatch={handleCancelMatch}
       />
 
       {/* 手動追加モーダル */}
@@ -446,6 +490,8 @@ const styles = StyleSheet.create({
   categoryBadgeText: { fontSize: 11, color: '#81B29A' },
   amazonBadge: { paddingVertical: 2, paddingHorizontal: 8, backgroundColor: 'rgba(242,204,143,0.15)', borderRadius: 6 },
   amazonBadgeText: { fontSize: 11, color: '#F2CC8F' },
+  excludedBadge: { paddingVertical: 2, paddingHorizontal: 8, backgroundColor: 'rgba(141,153,174,0.15)', borderRadius: 6 },
+  excludedBadgeText: { fontSize: 11, color: '#8D99AE' },
   categoryPicker: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 10, padding: 8, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10 },
   categoryOption: { paddingVertical: 4, paddingHorizontal: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 6 },
   categoryOptionActive: { backgroundColor: 'rgba(129,178,154,0.2)', borderColor: '#81B29A' },

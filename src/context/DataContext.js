@@ -127,21 +127,31 @@ export function DataProvider({ children }) {
     [monthItems, selectedPayment]
   );
 
+  // 集計対象の判定は画面間で共有する
+  const isItemIncludedInTotal = useCallback(
+    (item) => !(selectedSource === 'all' && item.excluded === true),
+    [selectedSource]
+  );
+  const calculateItemsTotal = useCallback(
+    (itemsToTotal) => itemsToTotal.filter(isItemIncludedInTotal).reduce((sum, item) => sum + item.price, 0),
+    [isItemIncludedInTotal]
+  );
+
   // 月間合計
   const monthlyTotal = useMemo(
-    () => filteredItems.reduce((s, i) => s + i.price, 0),
-    [filteredItems]
+    () => calculateItemsTotal(filteredItems),
+    [filteredItems, calculateItemsTotal]
   );
 
   // カテゴリ別内訳
   const categoryBreakdown = useMemo(() => {
     const map = {};
-    filteredItems.forEach((i) => { map[i.category] = (map[i.category] || 0) + i.price; });
+    filteredItems.filter(isItemIncludedInTotal).forEach((i) => { map[i.category] = (map[i.category] || 0) + i.price; });
     const total = Object.values(map).reduce((s, v) => s + v, 0) || 1;
     return Object.entries(map)
       .map(([name, value]) => ({ name, value, percent: Math.round((value / total) * 100) }))
       .sort((a, b) => b.value - a.value);
-  }, [filteredItems]);
+  }, [filteredItems, isItemIncludedInTotal]);
 
   // 利用可能な月一覧（ソースフィルター後）
   const months = useMemo(
@@ -161,6 +171,7 @@ export function DataProvider({ children }) {
     selectedPayment, setSelectedPayment, paymentMethods,
     selectedSource, setSelectedSource, availableSources,
     monthlyTotal, categoryBreakdown,
+    isItemIncludedInTotal, calculateItemsTotal,
     budgets, updateBudget, currentBudget,
     lastSync, setLastSync,
     addItems, updateItem, deleteItem, deduplicateItems,
