@@ -1,10 +1,11 @@
 import React from 'react';
 import {
-  View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TextInput, StyleSheet,
 } from 'react-native';
 import { useData } from '../context/DataContext';
 import { CATEGORY_COLORS, CATEGORY_ICONS, formatYen } from '../utils/categories';
 import SourceSelector from '../components/SourceSelector';
+import MonthSelector from '../components/MonthSelector';
 
 export default function BudgetScreen() {
   const {
@@ -18,15 +19,6 @@ export default function BudgetScreen() {
   const remaining = budget ? budget - monthlyTotal : 0;
   const budgetPercent = budget ? Math.min((monthlyTotal / budget) * 100, 100) : 0;
 
-  const prevMonth = () => {
-    const idx = months.indexOf(selectedMonth);
-    if (idx < months.length - 1) setSelectedMonth(months[idx + 1]);
-  };
-  const nextMonth = () => {
-    const idx = months.indexOf(selectedMonth);
-    if (idx > 0) setSelectedMonth(months[idx - 1]);
-  };
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }}>
       {/* ソース切り替え */}
@@ -35,17 +27,7 @@ export default function BudgetScreen() {
       </View>
 
       {/* 月セレクター */}
-      <View style={styles.monthSelector}>
-        <TouchableOpacity onPress={prevMonth} style={styles.monthArrow}>
-          <Text style={styles.arrowText}>◀</Text>
-        </TouchableOpacity>
-        <Text style={styles.monthLabel}>
-          {selectedMonth.replace('-', '年') + '月'}
-        </Text>
-        <TouchableOpacity onPress={nextMonth} style={styles.monthArrow}>
-          <Text style={styles.arrowText}>▶</Text>
-        </TouchableOpacity>
-      </View>
+      <MonthSelector months={months} selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth} style={{ paddingVertical: 8 }} />
 
       {/* 予算入力 */}
       <View style={styles.card}>
@@ -142,10 +124,6 @@ export default function BudgetScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d1117', paddingHorizontal: 16 },
-  monthSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, paddingVertical: 8 },
-  monthArrow: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
-  arrowText: { color: '#8D99AE', fontSize: 14 },
-  monthLabel: { fontSize: 18, fontWeight: '700', color: '#e0e0e0', minWidth: 120, textAlign: 'center' },
   card: { backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: 16, marginBottom: 12 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: '#c0c0c0', marginBottom: 12 },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 12 },

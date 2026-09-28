@@ -9,6 +9,8 @@ import {
   classifyItem, generateId, formatYen,
 } from '../utils/categories';
 import SourceSelector from '../components/SourceSelector';
+import MonthSelector from '../components/MonthSelector';
+import PaymentSelector from '../components/PaymentSelector';
 import { formatLocalDate } from '../utils/date';
 
 // ============================================================
@@ -246,37 +248,6 @@ const mStyles = StyleSheet.create({
 });
 
 // ============================================================
-// 支払い方法セレクター
-// ============================================================
-
-function PaymentSelector({ paymentMethods, selectedPayment, setSelectedPayment }) {
-  if (paymentMethods.length === 0) return null;
-  return (
-    <View style={psStyles.container}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={psStyles.scroll}>
-        <TouchableOpacity style={[psStyles.chip, selectedPayment === 'all' && psStyles.chipActive]} onPress={() => setSelectedPayment('all')}>
-          <Text style={[psStyles.chipText, selectedPayment === 'all' && psStyles.chipTextActive]}>💳 すべて</Text>
-        </TouchableOpacity>
-        {paymentMethods.map((pm) => (
-          <TouchableOpacity key={pm} style={[psStyles.chip, selectedPayment === pm && psStyles.chipActive]} onPress={() => setSelectedPayment(pm)}>
-            <Text style={[psStyles.chipText, selectedPayment === pm && psStyles.chipTextActive]}>💳 {pm}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-const psStyles = StyleSheet.create({
-  container: { marginBottom: 4 },
-  scroll: { paddingHorizontal: 16, gap: 6 },
-  chip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  chipActive: { backgroundColor: 'rgba(129,178,154,0.2)', borderColor: '#81B29A' },
-  chipText: { fontSize: 12, color: '#8D99AE' },
-  chipTextActive: { color: '#81B29A', fontWeight: '600' },
-});
-
-// ============================================================
 // メイン画面
 // ============================================================
 
@@ -286,7 +257,7 @@ export default function HistoryScreen() {
     selectedMonth, setSelectedMonth, months,
     selectedPayment, setSelectedPayment, paymentMethods,
     selectedSource, setSelectedSource, availableSources,
-    updateItem, deleteItem, addItems, calculateItemsTotal,
+    updateItem, deleteItem, addManualItem, calculateItemsTotal,
     learnedCategories, learnCategory,
   } = useData();
 
@@ -295,7 +266,7 @@ export default function HistoryScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [amazonMatchItem, setAmazonMatchItem] = useState(null);
   const [addForm, setAddForm] = useState({
-    name: '', price: '', category: 'その他',
+    name: '', price: '', category: '', source: selectedSource === 'all' ? 'manual' : selectedSource,
     date: formatLocalDate(),
   });
 
@@ -314,12 +285,12 @@ export default function HistoryScreen() {
       id: generateId(), date: addForm.date, name: addForm.name,
       price: parseFloat(addForm.price) || 0,
       category: addForm.category || classifyItem(addForm.name, learnedCategories),
-      paymentMethod: '', source: selectedSource === 'all' ? '' : selectedSource, memo: '',
+      paymentMethod: '', source: addForm.source, memo: '',
     };
-    await addItems([newItem]);
-    setAddForm({ name: '', price: '', category: 'その他', date: formatLocalDate() });
+    await addManualItem(newItem);
+    setAddForm({ name: '', price: '', category: '', source: selectedSource === 'all' ? 'manual' : selectedSource, date: formatLocalDate() });
     setShowAddModal(false);
-  }, [addForm, addItems, selectedSource, learnedCategories]);
+  }, [addForm, addManualItem, selectedSource, learnedCategories]);
 
   const handleDelete = useCallback((id, name) => {
     const displayName = name.length > 20 ? name.slice(0, 20) + '...' : name;
@@ -343,9 +314,6 @@ export default function HistoryScreen() {
     ? items.find((item) => item.id === amazonMatchItem.id) || null
     : null;
 
-  const prevMonth = () => { const idx = months.indexOf(selectedMonth); if (idx < months.length - 1) setSelectedMonth(months[idx + 1]); };
-  const nextMonth = () => { const idx = months.indexOf(selectedMonth); if (idx > 0) setSelectedMonth(months[idx - 1]); };
-
   return (
     <View style={styles.container}>
       {/* ソース切り替え */}
@@ -354,11 +322,7 @@ export default function HistoryScreen() {
       </View>
 
       {/* 月セレクター */}
-      <View style={styles.monthSelector}>
-        <TouchableOpacity onPress={prevMonth} style={styles.monthArrow}><Text style={styles.arrowText}>◀</Text></TouchableOpacity>
-        <Text style={styles.monthDisplay}>{selectedMonth.replace('-', '年') + '月'}</Text>
-        <TouchableOpacity onPress={nextMonth} style={styles.monthArrow}><Text style={styles.arrowText}>▶</Text></TouchableOpacity>
-      </View>
+      <MonthSelector months={months} selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth} style={{ paddingVertical: 8, paddingHorizontal: 16 }} />
 
       {/* カード切り替え */}
       <PaymentSelector paymentMethods={paymentMethods} selectedPayment={selectedPayment} setSelectedPayment={setSelectedPayment} />
@@ -388,7 +352,7 @@ export default function HistoryScreen() {
                     <Text style={styles.itemDate}>
                       {item.date}
                       {item.paymentMethod ? `  ・  💳 ${item.paymentMethod}` : ''}
-                      {item.source ? `  ・  ${item.source === 'amazon' ? '📦' : '🏦'}` : ''}
+                      {`  ・  ${item.source === 'amazon' ? '📦' : item.source === 'smbc' ? '🏦' : '💴'}`}
                     </Text>
                     <View style={styles.badgeRow}>
                       <TouchableOpacity onPress={() => setEditingId(editingId === item.id ? null : item.id)} style={styles.categoryBadge}>
@@ -430,7 +394,10 @@ export default function HistoryScreen() {
         {searched.length === 0 && (<Text style={styles.noData}>データがありません</Text>)}
       </ScrollView>
 
-      <TouchableOpacity style={styles.fab} onPress={() => setShowAddModal(true)}><Text style={styles.fabText}>＋</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.fab} onPress={() => {
+        setAddForm({ name: '', price: '', category: '', source: selectedSource === 'all' ? 'manual' : selectedSource, date: formatLocalDate() });
+        setShowAddModal(true);
+      }}><Text style={styles.fabText}>＋</Text></TouchableOpacity>
 
       {/* Amazon紐づけモーダル */}
       <AmazonMatchModal
@@ -451,9 +418,19 @@ export default function HistoryScreen() {
             <TextInput placeholder="商品名" placeholderTextColor="#8D99AE" value={addForm.name} onChangeText={(v) => setAddForm({ ...addForm, name: v })} style={styles.input} />
             <TextInput placeholder="金額" placeholderTextColor="#8D99AE" keyboardType="numeric" value={addForm.price} onChangeText={(v) => setAddForm({ ...addForm, price: v })} style={styles.input} />
             <ScrollView horizontal style={styles.categoryScroll} showsHorizontalScrollIndicator={false}>
+              <TouchableOpacity onPress={() => setAddForm({ ...addForm, category: '' })} style={[styles.categoryChip, !addForm.category && styles.categoryChipActive]}>
+                <Text style={[styles.categoryChipText, !addForm.category && styles.categoryChipTextActive]}>🪄 自動</Text>
+              </TouchableOpacity>
               {CATEGORIES.map((c) => (
                 <TouchableOpacity key={c} onPress={() => setAddForm({ ...addForm, category: c })} style={[styles.categoryChip, addForm.category === c && styles.categoryChipActive]}>
                   <Text style={[styles.categoryChipText, addForm.category === c && styles.categoryChipTextActive]}>{CATEGORY_ICONS[c]} {c}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <ScrollView horizontal style={styles.categoryScroll} showsHorizontalScrollIndicator={false}>
+              {[['manual', '💴 現金・その他'], ['amazon', '📦 Amazon'], ['smbc', '🏦 SMBC']].map(([source, label]) => (
+                <TouchableOpacity key={source} onPress={() => setAddForm({ ...addForm, source })} style={[styles.categoryChip, addForm.source === source && styles.categoryChipActive]}>
+                  <Text style={[styles.categoryChipText, addForm.source === source && styles.categoryChipTextActive]}>{label}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -470,10 +447,6 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d1117' },
-  monthSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, paddingVertical: 8, paddingHorizontal: 16 },
-  monthArrow: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
-  arrowText: { color: '#8D99AE', fontSize: 14 },
-  monthDisplay: { fontSize: 18, fontWeight: '700', color: '#e0e0e0', minWidth: 120, textAlign: 'center' },
   searchContainer: { paddingHorizontal: 16, marginTop: 8, marginBottom: 8 },
   searchInput: { padding: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 12, color: '#e0e0e0', fontSize: 14 },
   summary: { color: '#8D99AE', fontSize: 12, textAlign: 'center', marginBottom: 8 },

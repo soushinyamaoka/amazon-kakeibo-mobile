@@ -5,6 +5,7 @@ const SOURCE_LABELS = {
   all: { icon: '📊', label: 'すべて' },
   amazon: { icon: '📦', label: 'Amazon' },
   smbc: { icon: '🏦', label: 'SMBC' },
+  manual: { icon: '💴', label: '現金・その他' },
 };
 
 export default function SourceSelector({ availableSources, selectedSource, setSelectedSource }) {

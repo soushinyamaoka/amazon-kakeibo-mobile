@@ -61,6 +61,12 @@ export function DataProvider({ children }) {
     return { addedCount, duplicateCount };
   }, [items]);
 
+  const addManualItem = useCallback(async (item) => {
+    const updated = [...items, item].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    setItems(updated);
+    await saveItems(updated);
+  }, [items]);
+
   // アイテムの更新
   const updateItem = useCallback(async (id, updates) => {
     const updated = items.map((i) => (i.id === id ? { ...i, ...updates } : i));
@@ -111,13 +117,13 @@ export function DataProvider({ children }) {
 
   // データソースの一覧
   const availableSources = useMemo(
-    () => [...new Set(items.map((i) => i.source).filter(Boolean))],
+    () => [...new Set(items.map((i) => i.source || 'manual'))],
     [items]
   );
 
   // ソースでフィルター
   const sourceItems = useMemo(
-    () => selectedSource === 'all' ? items : items.filter((i) => i.source === selectedSource),
+    () => selectedSource === 'all' ? items : items.filter((i) => (i.source || 'manual') === selectedSource),
     [items, selectedSource]
   );
 
@@ -186,7 +192,7 @@ export function DataProvider({ children }) {
     isItemIncludedInTotal, calculateItemsTotal,
     budgets, updateBudget, currentBudget,
     lastSyncBySource, updateLastSync, clearAllData,
-    addItems, updateItem, deleteItem, deduplicateItems,
+    addItems, addManualItem, updateItem, deleteItem, deduplicateItems,
     learnedCategories, learnCategory, resetLearnedCategories,
   };
 

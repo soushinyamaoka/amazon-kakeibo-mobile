@@ -5,44 +5,8 @@ import {
 import { useData } from '../context/DataContext';
 import { CATEGORY_COLORS, CATEGORY_ICONS, formatYen } from '../utils/categories';
 import SourceSelector from '../components/SourceSelector';
-
-function PaymentSelector({ paymentMethods, selectedPayment, setSelectedPayment }) {
-  if (paymentMethods.length === 0) return null;
-  return (
-    <View style={psStyles.container}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={psStyles.scroll}>
-        <TouchableOpacity
-          style={[psStyles.chip, selectedPayment === 'all' && psStyles.chipActive]}
-          onPress={() => setSelectedPayment('all')}
-        >
-          <Text style={[psStyles.chipText, selectedPayment === 'all' && psStyles.chipTextActive]}>💳 すべて</Text>
-        </TouchableOpacity>
-        {paymentMethods.map((pm) => (
-          <TouchableOpacity
-            key={pm}
-            style={[psStyles.chip, selectedPayment === pm && psStyles.chipActive]}
-            onPress={() => setSelectedPayment(pm)}
-          >
-            <Text style={[psStyles.chipText, selectedPayment === pm && psStyles.chipTextActive]}>💳 {pm}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-const psStyles = StyleSheet.create({
-  container: { marginBottom: 4 },
-  scroll: { paddingHorizontal: 16, gap: 6 },
-  chip: {
-    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
-  },
-  chipActive: { backgroundColor: 'rgba(129,178,154,0.2)', borderColor: '#81B29A' },
-  chipText: { fontSize: 12, color: '#8D99AE' },
-  chipTextActive: { color: '#81B29A', fontWeight: '600' },
-});
+import MonthSelector from '../components/MonthSelector';
+import PaymentSelector from '../components/PaymentSelector';
 
 export default function DashboardScreen({ navigation }) {
   const {
@@ -56,15 +20,6 @@ export default function DashboardScreen({ navigation }) {
   const budget = currentBudget;
   const remaining = budget ? budget - monthlyTotal : 0;
   const budgetPercent = budget ? Math.min((monthlyTotal / budget) * 100, 100) : 0;
-
-  const prevMonth = () => {
-    const idx = months.indexOf(selectedMonth);
-    if (idx < months.length - 1) setSelectedMonth(months[idx + 1]);
-  };
-  const nextMonth = () => {
-    const idx = months.indexOf(selectedMonth);
-    if (idx > 0) setSelectedMonth(months[idx - 1]);
-  };
 
   if (filteredItems.length === 0 && months.length === 0) {
     return (
@@ -97,15 +52,7 @@ export default function DashboardScreen({ navigation }) {
       </View>
 
       {/* 月セレクター */}
-      <View style={styles.monthSelector}>
-        <TouchableOpacity onPress={prevMonth} style={styles.monthArrow}>
-          <Text style={styles.monthArrowText}>◀</Text>
-        </TouchableOpacity>
-        <Text style={styles.monthDisplay}>{selectedMonth.replace('-', '年') + '月'}</Text>
-        <TouchableOpacity onPress={nextMonth} style={styles.monthArrow}>
-          <Text style={styles.monthArrowText}>▶</Text>
-        </TouchableOpacity>
-      </View>
+      <MonthSelector months={months} selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth} style={{ paddingVertical: 12 }} />
 
       {/* カード切り替え */}
       <PaymentSelector paymentMethods={paymentMethods} selectedPayment={selectedPayment} setSelectedPayment={setSelectedPayment} />
@@ -196,10 +143,6 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, color: '#8D99AE', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
   syncBtn: { paddingVertical: 14, paddingHorizontal: 28, backgroundColor: '#81B29A', borderRadius: 14 },
   syncBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  monthSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, paddingVertical: 12 },
-  monthArrow: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
-  monthArrowText: { color: '#8D99AE', fontSize: 14 },
-  monthDisplay: { fontSize: 18, fontWeight: '700', color: '#e0e0e0', minWidth: 120, textAlign: 'center' },
   summaryCard: { padding: 20, borderRadius: 16, marginBottom: 12, marginTop: 8, backgroundColor: 'rgba(129,178,154,0.1)', borderWidth: 1, borderColor: 'rgba(129,178,154,0.2)' },
   summaryLabel: { color: '#8D99AE', fontSize: 13 },
   summaryAmount: { fontSize: 32, fontWeight: '800', color: '#e0e0e0', marginTop: 4, letterSpacing: -1 },
