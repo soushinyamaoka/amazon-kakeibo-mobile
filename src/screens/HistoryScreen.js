@@ -9,6 +9,7 @@ import {
   classifyItem, generateId, formatYen,
 } from '../utils/categories';
 import SourceSelector from '../components/SourceSelector';
+import { formatLocalDate } from '../utils/date';
 
 // ============================================================
 // Amazon紐づけ機能
@@ -295,7 +296,7 @@ export default function HistoryScreen() {
   const [amazonMatchItem, setAmazonMatchItem] = useState(null);
   const [addForm, setAddForm] = useState({
     name: '', price: '', category: 'その他',
-    date: new Date().toISOString().slice(0, 10),
+    date: formatLocalDate(),
   });
 
   const searched = searchQuery.trim()
@@ -316,7 +317,7 @@ export default function HistoryScreen() {
       paymentMethod: '', source: selectedSource === 'all' ? '' : selectedSource, memo: '',
     };
     await addItems([newItem]);
-    setAddForm({ name: '', price: '', category: 'その他', date: new Date().toISOString().slice(0, 10) });
+    setAddForm({ name: '', price: '', category: 'その他', date: formatLocalDate() });
     setShowAddModal(false);
   }, [addForm, addItems, selectedSource, learnedCategories]);
 

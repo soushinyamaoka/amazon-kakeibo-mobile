@@ -4,7 +4,9 @@ import { mergeNewItems } from './itemMerge';
 const KEYS = {
   ITEMS: '@kakeibo_items',
   BUDGETS: '@kakeibo_budgets',
-  LAST_SYNC: '@kakeibo_last_sync',
+  LAST_SYNC_AMAZON: '@kakeibo_last_sync_amazon',
+  LAST_SYNC_SMBC: '@kakeibo_last_sync_smbc',
+  LEGACY_LAST_SYNC: '@kakeibo_last_sync',
   LEARNED_CATEGORIES: '@kakeibo_learned_categories',
 };
 
@@ -51,20 +53,33 @@ export async function saveBudgets(budgets) {
   }
 }
 
-export async function saveLastSync(date) {
+export async function saveLastSync(source, date) {
   try {
-    await AsyncStorage.setItem(KEYS.LAST_SYNC, date);
+    const key = source === 'amazon' ? KEYS.LAST_SYNC_AMAZON : KEYS.LAST_SYNC_SMBC;
+    await AsyncStorage.setItem(key, date);
   } catch (e) {
     console.error('Failed to save last sync:', e);
   }
 }
 
-export async function loadLastSync() {
+export async function loadLastSync(source) {
   try {
-    return await AsyncStorage.getItem(KEYS.LAST_SYNC);
+    const key = source === 'amazon' ? KEYS.LAST_SYNC_AMAZON : KEYS.LAST_SYNC_SMBC;
+    return (await AsyncStorage.getItem(key)) || await AsyncStorage.getItem(KEYS.LEGACY_LAST_SYNC);
   } catch (e) {
     return null;
   }
+}
+
+export async function clearAllData() {
+  await AsyncStorage.multiRemove([
+    KEYS.ITEMS,
+    KEYS.BUDGETS,
+    KEYS.LAST_SYNC_AMAZON,
+    KEYS.LAST_SYNC_SMBC,
+    KEYS.LEGACY_LAST_SYNC,
+    KEYS.LEARNED_CATEGORIES,
+  ]);
 }
 
 // ============================================================

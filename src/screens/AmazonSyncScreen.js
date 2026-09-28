@@ -1,17 +1,17 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert,
-  ActivityIndicator, SafeAreaView, ScrollView, Linking,
+  ActivityIndicator, ScrollView, Linking,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useData } from '../context/DataContext';
 import { parseAmazonCSV, parseAmazonZip } from '../utils/csvParser';
-import { saveLastSync } from '../utils/storage';
+import { formatLocalDate } from '../utils/date';
 
 const AMAZON_DATA_REQUEST_URL = 'https://www.amazon.co.jp/gp/privacycentral/dsar/preview.html';
 
 export default function AmazonSyncScreen() {
-  const { addItems, lastSync, setLastSync, items, deduplicateItems, learnedCategories, resetLearnedCategories } = useData();
+  const { addItems, lastSyncBySource, updateLastSync, clearAllData, items, deduplicateItems, learnedCategories, resetLearnedCategories } = useData();
   const [csvLoading, setCsvLoading] = useState(false);
 
   // ==================== ファイルインポート ====================
@@ -65,9 +65,7 @@ export default function AmazonSyncScreen() {
       }
 
       const { addedCount, duplicateCount } = await addItems(parsedItems);
-      const now = new Date().toISOString().slice(0, 10);
-      await saveLastSync(now);
-      setLastSync(now);
+      await updateLastSync('amazon', formatLocalDate());
 
       setCsvLoading(false);
 
@@ -83,7 +81,7 @@ export default function AmazonSyncScreen() {
       setCsvLoading(false);
       Alert.alert('エラー', `ファイルの読み込みに失敗しました: ${e.message}`);
     }
-  }, [addItems, setLastSync, learnedCategories]);
+  }, [addItems, updateLastSync, learnedCategories]);
 
   // ==================== Amazonデータリクエスト ====================
   const handleDataRequest = useCallback(() => {
@@ -94,7 +92,7 @@ export default function AmazonSyncScreen() {
 
   // ==================== メイン画面 ====================
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.icon}>📄</Text>
         <Text style={styles.title}>Amazon データ取り込み</Text>
@@ -162,7 +160,7 @@ export default function AmazonSyncScreen() {
         </View>
 
         {/* ステータス情報 */}
-        {(lastSync || items.length > 0) && (
+        {(lastSyncBySource.amazon || items.length > 0) && (
           <View style={styles.statusCard}>
             {items.length > 0 && (
               <View style={styles.statusRow}>
@@ -170,10 +168,10 @@ export default function AmazonSyncScreen() {
                 <Text style={styles.statusValue}>{items.length}件</Text>
               </View>
             )}
-            {lastSync && (
+            {lastSyncBySource.amazon && (
               <View style={styles.statusRow}>
                 <Text style={styles.statusLabel}>最終更新</Text>
-                <Text style={styles.statusValue}>{lastSync}</Text>
+                <Text style={styles.statusValue}>{lastSyncBySource.amazon}</Text>
               </View>
             )}
             {Object.keys(learnedCategories).length > 0 && (
@@ -248,9 +246,8 @@ export default function AmazonSyncScreen() {
                       text: '全削除',
                       style: 'destructive',
                       onPress: async () => {
-                        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-                        await AsyncStorage.clear();
-                        Alert.alert('完了', 'すべてのデータを削除しました。アプリを再読み込みしてください。');
+                        await clearAllData();
+                        Alert.alert('完了', 'すべてのデータを削除しました。');
                       },
                     },
                   ]
@@ -272,7 +269,7 @@ export default function AmazonSyncScreen() {
           </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

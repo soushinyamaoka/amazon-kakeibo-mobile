@@ -2,18 +2,19 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import {
   loadItems, saveItems, mergeItems,
   loadBudgets, saveBudgets,
-  loadLastSync,
+  loadLastSync, saveLastSync, clearAllData as clearStoredData,
   loadLearnedCategories, saveLearnedCategories,
 } from '../utils/storage';
 import { normalizeName } from '../utils/categories';
 import { deduplicateByItemKey } from '../utils/itemMerge';
+import { formatLocalDate } from '../utils/date';
 
 const DataContext = createContext();
 
 export function DataProvider({ children }) {
   const [items, setItems] = useState([]);
   const [budgets, setBudgets] = useState({});
-  const [lastSync, setLastSync] = useState(null);
+  const [lastSyncBySource, setLastSyncBySource] = useState({ amazon: null, smbc: null });
   const [learnedCategories, setLearnedCategories] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -26,15 +27,31 @@ export function DataProvider({ children }) {
   // 初回ロード
   useEffect(() => {
     (async () => {
-      const [loadedItems, loadedBudgets, loadedSync, loadedLearned] = await Promise.all([
-        loadItems(), loadBudgets(), loadLastSync(), loadLearnedCategories(),
+      const [loadedItems, loadedBudgets, amazonSync, smbcSync, loadedLearned] = await Promise.all([
+        loadItems(), loadBudgets(), loadLastSync('amazon'), loadLastSync('smbc'), loadLearnedCategories(),
       ]);
       setItems(loadedItems);
       setBudgets(loadedBudgets);
-      setLastSync(loadedSync);
+      setLastSyncBySource({ amazon: amazonSync, smbc: smbcSync });
       setLearnedCategories(loadedLearned);
       setLoading(false);
     })();
+  }, []);
+
+  const updateLastSync = useCallback(async (source, date) => {
+    await saveLastSync(source, date);
+    setLastSyncBySource((current) => ({ ...current, [source]: date }));
+  }, []);
+
+  const clearAllData = useCallback(async () => {
+    await clearStoredData();
+    setItems([]);
+    setBudgets({});
+    setLastSyncBySource({ amazon: null, smbc: null });
+    setLearnedCategories({});
+    setSelectedSource('all');
+    setSelectedPayment('all');
+    setSelectedMonth(formatLocalDate().slice(0, 7));
   }, []);
 
   // アイテムの追加
@@ -168,7 +185,7 @@ export function DataProvider({ children }) {
     monthlyTotal, categoryBreakdown,
     isItemIncludedInTotal, calculateItemsTotal,
     budgets, updateBudget, currentBudget,
-    lastSync, setLastSync,
+    lastSyncBySource, updateLastSync, clearAllData,
     addItems, updateItem, deleteItem, deduplicateItems,
     learnedCategories, learnCategory, resetLearnedCategories,
   };

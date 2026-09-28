@@ -1,18 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert,
-  ActivityIndicator, SafeAreaView, ScrollView, Linking,
+  ActivityIndicator, ScrollView, Linking,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useData } from '../context/DataContext';
 import { parseSMBCCSV } from '../utils/csvParser';
-import { saveLastSync } from '../utils/storage';
+import { formatLocalDate } from '../utils/date';
 
 const SMBC_DIRECT_URL = 'https://direct.smbc.co.jp/aib/aibgsjsw5001.jsp';
 const SMBC_APP_URL = 'https://www.smbc.co.jp/kojin/app/';
 
 export default function BankSyncScreen() {
-  const { addItems, lastSync, setLastSync, items, deduplicateItems, learnedCategories } = useData();
+  const { addItems, lastSyncBySource, updateLastSync, items, deduplicateItems, learnedCategories } = useData();
   const [loading, setLoading] = useState(false);
 
   // ==================== ファイルインポート ====================
@@ -39,9 +39,7 @@ export default function BankSyncScreen() {
       }
 
       const { addedCount, duplicateCount } = await addItems(csvResult.items);
-      const now = new Date().toISOString().slice(0, 10);
-      await saveLastSync(now);
-      setLastSync(now);
+      await updateLastSync('smbc', formatLocalDate());
 
       setLoading(false);
 
@@ -55,7 +53,7 @@ export default function BankSyncScreen() {
       setLoading(false);
       Alert.alert('エラー', `ファイルの読み込みに失敗しました: ${e.message}`);
     }
-  }, [addItems, setLastSync, learnedCategories]);
+  }, [addItems, updateLastSync, learnedCategories]);
 
   // ==================== リンクを開く ====================
   const openSMBCDirect = useCallback(() => {
@@ -74,7 +72,7 @@ export default function BankSyncScreen() {
   const bankItems = items.filter((i) => i.source === 'smbc');
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.icon}>🏦</Text>
         <Text style={styles.title}>銀行データ取り込み</Text>
@@ -164,7 +162,7 @@ export default function BankSyncScreen() {
         </View>
 
         {/* ステータス情報 */}
-        {(lastSync || bankItems.length > 0) && (
+        {(lastSyncBySource.smbc || bankItems.length > 0) && (
           <View style={styles.statusCard}>
             {bankItems.length > 0 && (
               <View style={styles.statusRow}>
@@ -172,10 +170,10 @@ export default function BankSyncScreen() {
                 <Text style={styles.statusValue}>{bankItems.length}件</Text>
               </View>
             )}
-            {lastSync && (
+            {lastSyncBySource.smbc && (
               <View style={styles.statusRow}>
                 <Text style={styles.statusLabel}>最終更新</Text>
-                <Text style={styles.statusValue}>{lastSync}</Text>
+                <Text style={styles.statusValue}>{lastSyncBySource.smbc}</Text>
               </View>
             )}
           </View>
@@ -190,7 +188,7 @@ export default function BankSyncScreen() {
           </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
