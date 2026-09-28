@@ -32,6 +32,8 @@ export default function AmazonSyncScreen() {
 
       let parsedItems = [];
       let skipped = 0;
+      let invalidDateCount = 0;
+      let cancelledCount = 0;
       let error = null;
       let usedFileName = '';
 
@@ -41,6 +43,8 @@ export default function AmazonSyncScreen() {
         const zipResult = await parseAmazonZip(arrayBuffer, learnedCategories);
         parsedItems = zipResult.items;
         skipped = zipResult.skipped || 0;
+        invalidDateCount = zipResult.invalidDateCount || 0;
+        cancelledCount = zipResult.cancelledCount || 0;
         error = zipResult.error;
         usedFileName = zipResult.fileName || '';
       } else {
@@ -49,6 +53,8 @@ export default function AmazonSyncScreen() {
         const csvResult = parseAmazonCSV(csvText, learnedCategories);
         parsedItems = csvResult.items;
         skipped = csvResult.skipped || 0;
+        invalidDateCount = csvResult.invalidDateCount || 0;
+        cancelledCount = csvResult.cancelledCount || 0;
         error = csvResult.error;
       }
 
@@ -58,14 +64,17 @@ export default function AmazonSyncScreen() {
         return;
       }
 
-      const addedCount = await addItems(parsedItems);
+      const { addedCount, duplicateCount } = await addItems(parsedItems);
       const now = new Date().toISOString().slice(0, 10);
       await saveLastSync(now);
       setLastSync(now);
 
       setCsvLoading(false);
 
-      let message = `${parsedItems.length}件の注文を読み込みました\n新規追加: ${addedCount}件`;
+      let message = `${parsedItems.length + skipped + invalidDateCount + cancelledCount}件の注文を読み込みました\n新規追加: ${addedCount}件`;
+      if (duplicateCount > 0) message += `\n重複のためスキップ: ${duplicateCount}件`;
+      if (invalidDateCount > 0) message += `\n日付不明でスキップ: ${invalidDateCount}件`;
+      if (cancelledCount > 0) message += `\nキャンセル済みでスキップ: ${cancelledCount}件`;
       if (skipped > 0) message += `\nスキップ: ${skipped}件`;
       if (usedFileName) message += `\n\n読み込んだファイル:\n${usedFileName}`;
 

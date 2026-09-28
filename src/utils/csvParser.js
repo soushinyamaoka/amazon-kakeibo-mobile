@@ -59,8 +59,8 @@ function parseCSVText(text) {
 }
 
 // 日付文字列を YYYY-MM-DD に変換
-function normalizeDate(dateStr) {
-  if (!dateStr) return new Date().toISOString().slice(0, 10);
+export function normalizeDate(dateStr) {
+  if (!dateStr) return null;
 
   const isoFull = dateStr.match(/(\d{4})-(\d{2})-(\d{2})T/);
   if (isoFull) return `${isoFull[1]}-${isoFull[2]}-${isoFull[3]}`;
@@ -71,7 +71,7 @@ function normalizeDate(dateStr) {
   const jp = dateStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
   if (jp) return `${jp[1]}-${jp[2].padStart(2, '0')}-${jp[3].padStart(2, '0')}`;
 
-  return new Date().toISOString().slice(0, 10);
+  return null;
 }
 
 // 金額文字列から数値を抽出
@@ -100,6 +100,8 @@ const TOTAL_PRICE_KEYS = ['Total Owed', 'total owed', 'Item Total', 'item total'
 const UNIT_PRICE_KEYS = ['Purchase Price Per Unit', 'purchase price per unit', 'Unit Price', 'unit price', '価格'];
 const QUANTITY_KEYS = ['Quantity', 'quantity', '数量', '個数'];
 const PAYMENT_KEYS = ['Payment Instrument Type', 'payment instrument type', '支払い方法', '決済方法'];
+const ORDER_ID_KEYS = ['Order ID', 'order id', '注文番号'];
+const ORDER_STATUS_KEYS = ['Order Status', 'order status', '注文状況'];
 const EXT_DATE_KEYS = ['注文日', 'date', 'Date'];
 const EXT_NAME_KEYS = ['商品名', 'title', 'Title', 'name'];
 const EXT_PRICE_KEYS = ['価格', '商品小計', 'price', 'Price', '合計'];
@@ -123,17 +125,28 @@ function resolvePrice(row) {
 
 function parseAmazonCSVToItems(csvText, learnedCategories) {
   const rows = parseCSVText(csvText);
-  if (rows.length === 0) return { items: [], skipped: 0 };
+  if (rows.length === 0) return { items: [], skipped: 0, invalidDateCount: 0, cancelledCount: 0 };
 
   const items = [];
   let skipped = 0;
+  let invalidDateCount = 0;
+  let cancelledCount = 0;
 
   for (const row of rows) {
     const date = findColumn(row, [...DATE_KEYS, ...EXT_DATE_KEYS]);
     const name = findColumn(row, [...NAME_KEYS, ...EXT_NAME_KEYS]);
     const payment = findColumn(row, PAYMENT_KEYS);
+    const orderId = findColumn(row, ORDER_ID_KEYS);
+    const orderStatus = findColumn(row, ORDER_STATUS_KEYS);
 
     if (!name) { skipped++; continue; }
+
+    if (orderStatus && (/cancel/i.test(orderStatus) || orderStatus.includes('キャンセル'))) {
+      cancelledCount++;
+      continue;
+    }
+    const normalizedDate = normalizeDate(date);
+    if (!normalizedDate) { invalidDateCount++; continue; }
 
     const price = resolvePrice(row);
 
@@ -142,17 +155,18 @@ function parseAmazonCSVToItems(csvText, learnedCategories) {
 
     items.push({
       id: generateId(),
-      date: normalizeDate(date),
+      date: normalizedDate,
       name: name,
       price: finalPrice,
       category: classifyItem(name, learnedCategories),
       paymentMethod: payment || '',
       source: 'amazon',
       memo: '',
+      ...(orderId ? { orderId } : {}),
     });
   }
 
-  return { items, skipped };
+  return { items, skipped, invalidDateCount, cancelledCount };
 }
 
 // ZIPファイルから注文履歴CSVを探して解析
@@ -167,7 +181,7 @@ export async function parseAmazonZip(arrayBuffer, learnedCategories) {
   });
 
   if (csvFiles.length === 0) {
-    return { items: [], error: 'ZIP内にCSVファイルが見つかりませんでした' };
+    return { items: [], skipped: 0, invalidDateCount: 0, cancelledCount: 0, error: 'ZIP内にCSVファイルが見つかりませんでした' };
   }
 
   const priorityRules = [
@@ -191,22 +205,22 @@ export async function parseAmazonZip(arrayBuffer, learnedCategories) {
   }
 
   if (!targetCsv) {
-    return { items: [], error: 'ZIP内に適切なCSVファイルが見つかりませんでした' };
+    return { items: [], skipped: 0, invalidDateCount: 0, cancelledCount: 0, error: 'ZIP内に適切なCSVファイルが見つかりませんでした' };
   }
 
   const csvText = await targetCsv.file.async('string');
-  const { items, skipped } = parseAmazonCSVToItems(csvText, learnedCategories);
+  const { items, skipped, invalidDateCount, cancelledCount } = parseAmazonCSVToItems(csvText, learnedCategories);
 
   return {
-    items, skipped, fileName: targetCsv.path,
+    items, skipped, invalidDateCount, cancelledCount, fileName: targetCsv.path,
     error: items.length === 0 ? 'CSVから商品データを読み取れませんでした。フォーマットを確認してください。' : null,
   };
 }
 
 export function parseAmazonCSV(csvText, learnedCategories) {
-  const { items, skipped } = parseAmazonCSVToItems(csvText, learnedCategories);
+  const { items, skipped, invalidDateCount, cancelledCount } = parseAmazonCSVToItems(csvText, learnedCategories);
   return {
-    items, skipped,
+    items, skipped, invalidDateCount, cancelledCount,
     error: items.length === 0 ? 'CSVから商品データを読み取れませんでした。フォーマットを確認してください。' : null,
   };
 }
@@ -257,23 +271,24 @@ export async function parseSMBCCSV(arrayBuffer, learnedCategories) {
   try {
     csvText = decodeShiftJIS(arrayBuffer);
   } catch (e) {
-    return { items: [], error: 'ファイルのエンコーディングを変換できませんでした' };
+    return { items: [], skipped: 0, invalidDateCount: 0, error: 'ファイルのエンコーディングを変換できませんでした' };
   }
 
   const rows = parseCSVText(csvText);
   if (rows.length === 0) {
-    return { items: [], skipped: 0, error: 'CSVからデータを読み取れませんでした' };
+    return { items: [], skipped: 0, invalidDateCount: 0, error: 'CSVからデータを読み取れませんでした' };
   }
 
   // SMBCフォーマット確認
   const firstRow = rows[0];
   const hasSMBCColumns = firstRow['年月日'] !== undefined || firstRow['お引出し'] !== undefined;
   if (!hasSMBCColumns) {
-    return { items: [], error: '三井住友銀行のCSVフォーマットではありません' };
+    return { items: [], skipped: 0, invalidDateCount: 0, error: '三井住友銀行のCSVフォーマットではありません' };
   }
 
   const items = [];
   let skipped = 0;
+  let invalidDateCount = 0;
 
   for (const row of rows) {
     const date = row['年月日'];
@@ -289,11 +304,14 @@ export async function parseSMBCCSV(arrayBuffer, learnedCategories) {
     const price = parsePrice(withdrawal);
     if (price === 0) { skipped++; continue; }
 
+    const normalizedDate = normalizeDate(date);
+    if (!normalizedDate) { invalidDateCount++; continue; }
+
     const cleanedName = cleanSMBCDescription(description);
 
     items.push({
       id: generateId(),
-      date: normalizeDate(date),
+      date: normalizedDate,
       name: cleanedName,
       price: price,
       category: classifyItem(cleanedName, learnedCategories),
@@ -305,7 +323,7 @@ export async function parseSMBCCSV(arrayBuffer, learnedCategories) {
 
   return {
     items,
-    skipped,
+    skipped, invalidDateCount,
     error: items.length === 0 ? 'CSVから支出データを読み取れませんでした。' : null,
   };
 }

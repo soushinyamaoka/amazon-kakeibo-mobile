@@ -38,7 +38,7 @@ export default function BankSyncScreen() {
         return;
       }
 
-      const addedCount = await addItems(csvResult.items);
+      const { addedCount, duplicateCount } = await addItems(csvResult.items);
       const now = new Date().toISOString().slice(0, 10);
       await saveLastSync(now);
       setLastSync(now);
@@ -46,6 +46,8 @@ export default function BankSyncScreen() {
       setLoading(false);
 
       let message = `${csvResult.items.length}件の取引を読み込みました\n新規追加: ${addedCount}件`;
+      if (duplicateCount > 0) message += `\n重複のためスキップ: ${duplicateCount}件`;
+      if (csvResult.invalidDateCount > 0) message += `\n日付不明でスキップ: ${csvResult.invalidDateCount}件`;
       if (csvResult.skipped > 0) message += `\nスキップ（入金等）: ${csvResult.skipped}件`;
 
       Alert.alert('インポート完了', message);

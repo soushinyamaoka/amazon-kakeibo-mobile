@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { mergeNewItems } from './itemMerge';
 
 const KEYS = {
   ITEMS: '@kakeibo_items',
@@ -26,11 +27,10 @@ export async function saveItems(items) {
 }
 
 export async function mergeItems(existingItems, newItems) {
-  const merged = [...existingItems, ...newItems].sort((a, b) =>
-    b.date.localeCompare(a.date)
-  );
+  const result = mergeNewItems(existingItems, newItems);
+  const { merged } = result;
   await saveItems(merged);
-  return { merged, addedCount: newItems.length };
+  return result;
 }
 
 export async function loadBudgets() {

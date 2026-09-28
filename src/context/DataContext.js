@@ -6,6 +6,7 @@ import {
   loadLearnedCategories, saveLearnedCategories,
 } from '../utils/storage';
 import { normalizeName } from '../utils/categories';
+import { deduplicateByItemKey } from '../utils/itemMerge';
 
 const DataContext = createContext();
 
@@ -38,9 +39,9 @@ export function DataProvider({ children }) {
 
   // アイテムの追加
   const addItems = useCallback(async (newItems) => {
-    const { merged, addedCount } = await mergeItems(items, newItems);
+    const { merged, addedCount, duplicateCount } = await mergeItems(items, newItems);
     setItems(merged);
-    return addedCount;
+    return { addedCount, duplicateCount };
   }, [items]);
 
   // アイテムの更新
@@ -69,13 +70,7 @@ export function DataProvider({ children }) {
 
   // 重複データを除去
   const deduplicateItems = useCallback(async () => {
-    const seen = new Map();
-    const unique = [];
-    for (const item of items) {
-      const normName = (item.name || '').replace(/\s+/g, '').replace(/[　\t\u3000]/g, '').replace(/…+/g, '').toLowerCase().substring(0, 20);
-      const key = `${item.date}_${normName}_${item.price}_${item.source || ''}`;
-      if (!seen.has(key)) { seen.set(key, true); unique.push(item); }
-    }
+    const unique = deduplicateByItemKey(items);
     const removed = items.length - unique.length;
     setItems(unique);
     await saveItems(unique);
